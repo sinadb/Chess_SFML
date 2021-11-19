@@ -17,6 +17,7 @@ protected:
 	std::vector<int> valid_moves;
 	std::vector<std::vector<int>> Paths;
 	bool first_move;
+	std::vector<int> danger_pieces;
 public:
 	Chess() = default;
 	Chess(const std::string& text_name, const sf::Vector2f pos){
@@ -79,7 +80,64 @@ public:
 
 	}
 
-	
+	std::vector<int> danger_path(int starting_index, int king_index) {
+		std::vector<int> temp;
+		std::vector<int> end_points;
+		int x = (king_index % 8) * 100;
+		int y = (king_index / 8) * 100;
+		if (x + 100 <= 700 && x + 100 >= 0){
+			end_points.push_back(king_index + 1);
+		}
+		if (x - 100 <= 700 && x - 100 >= 0) {
+			end_points.push_back(king_index - 1);
+		}
+		if (y + 100 <= 700 && y + 100 >= 0) {
+			end_points.push_back(king_index + 8);
+		}
+		if (y - 100 <= 700 && y - 100 >= 0) {
+			end_points.push_back(king_index - 8);
+		}
+		// up and right x+100 y-100
+		if (x + 100 <= 700 && x + 100 >= 0 && y - 100 <= 700 && y - 100 >= 0) {
+			end_points.push_back(king_index - 7);
+		}
+		// up and left x-100 y-100
+		if (x - 100 <= 700 && x - 100 >= 0 && y - 100 <= 700 && y - 100 >= 0) {
+			end_points.push_back(king_index - 9);
+		}
+		//down and right x+100 y+100
+		if (x + 100 <= 700 && x + 100 >= 0 && y + 100 <= 700 && y + 100 >= 0) {
+			end_points.push_back(king_index + 9);
+			
+		}
+		//down and left x-100 y+100
+		if (x - 100 <= 700 && x - 100 >= 0 && y + 100 <= 700 && y + 100 >= 0) {
+			end_points.push_back(king_index + 7);
+		}
+
+		bool found_end_point = false;
+		for (auto i : Paths) {
+			for (auto j : i) {
+				temp.push_back(j);
+				for(auto k : end_points){
+					if (k == j) {
+						found_end_point = true;
+						break;
+					}
+				}
+				if (found_end_point) {
+					break;
+				}
+			}
+			if (!found_end_point) {
+				temp.clear();
+			}
+			else {
+				break;
+			}
+		}
+		return temp;
+	}
 	void remove () { this->~Chess(); }
 	void reset_moves() { valid_moves.clear(); }
 	const sf::Vector2f& getPos() const{ return m_piece.getPosition(); }
@@ -94,12 +152,38 @@ public:
 		int index = x / 100 + y / 100 * 8;
 		return index;
 	}
-	virtual void Create_Path(std::vector<Chess*> drawables) {}
+	virtual void Create_Path(std::vector<Chess*> drawables, Board& chess) {}
+	std::vector<std::vector<int>> get_Paths() { return Paths; }
+
 	std::vector<int>& legal_moves() { return valid_moves; }
 	virtual bool check_if_in_check(Board& chess, std::vector<Chess*>& drawables) { return 0; }
 	const std::vector<std::vector<int>>& getPath() { return Paths; }
 	virtual void reset_danger() {}
-	void resetPaths() { Paths.clear(); }
+	void resetPaths() {
+		for (auto& i : Paths) {
+			i.clear();
+		}
+	}
+	friend const std::string& find_piece(int index, std::vector<Chess*>& drawables){
+		
+		for (auto& i : drawables) {
+			if (i->getIndex() == index) {
+				return i->getType();
+			}
+		}
+
+	}
+	friend Chess* get_Pointer(int index, std::vector<Chess*>& drawables) {
+
+		for (auto& i : drawables) {
+			if (i->getIndex() == index) {
+				return i;
+			}
+		}
+
+	}
+
+	virtual std::vector<int> get_danger_pieces() { return danger_pieces; }
 	
 };
 
@@ -155,6 +239,16 @@ public:
 							
 						valid_moves.push_back(index - 16);
 					}
+					if (index - 7 >= 0 && index - 7 <= 63) {
+						if (chess.Image()[index - 7].second && find_piece(index - 7, drawables)[1] != this->getType()[1]) {
+							valid_moves.push_back(index - 7);
+						}
+					}
+					if (index - 9 >= 0 && index - 9 <= 63) {
+						if (chess.Image()[index - 9].second && find_piece(index - 9, drawables)[1] != this->getType()[1]) {
+							valid_moves.push_back(index - 9);
+						}
+					}
 				}
 
 				if (this->getType() == "pw" && !this->first_move){
@@ -203,6 +297,16 @@ public:
 						
 						valid_moves.push_back(index + 16);
 					}
+					if (index + 7 >= 0 && index + 7 <= 63) {
+						if (chess.Image()[index + 7].second && find_piece(index + 7, drawables)[1] != this->getType()[1]) {
+							valid_moves.push_back(index + 7);
+						}
+					}
+					if (index + 9 >= 0 && index + 9 <= 63) {
+						if (chess.Image()[index + 9].second && find_piece(index + 9, drawables)[1] != this->getType()[1]) {
+							valid_moves.push_back(index + 9);
+						}
+					}
 
 					
 				}
@@ -247,6 +351,7 @@ public:
 };
 class Castle : public Chess {
 public:
+	Castle() = default;
 
 Castle(const std::string& text_name, const sf::Vector2f pos) : Chess(text_name, pos) {}
 
@@ -258,76 +363,89 @@ Castle(const std::string& text_name, const sf::Vector2f pos) : Chess(text_name, 
 			return "cb";
 		}
 	}
-	void Create_Path(std::vector<Chess*> drawables) {
+	
+	void Create_Path(std::vector<Chess*> drawables, Board& chess) {
 		std::vector<int> temp;
 		//going down
+		int x = (int)this->getPos().x;
+		int y = (int)this->getPos().y;
 		int i = 8;
-		while (this->getIndex()+i<=63 && this->getIndex() + i >= 0)
+		y += 100;
+		while ((this->getIndex() + i <= 63 && this->getIndex() + i >= 0 && !chess.Image()[this->getIndex() + i].second) || (this->getIndex() + i <= 63 && this->getIndex() + i >= 0 && !chess.Image()[this->getIndex() + i].second) && find_piece(this->getIndex() + i, drawables)[0]!='k')
 		{
-			
-			for (auto j : drawables) {
-				if (j->getIndex() == (this->getIndex() + i ) && j->getType()[1] != 'k') {
-					temp.clear();
-					break;
-				}
+			if (x + 100 <= 700 && x + 100 >= 0 && y + 100 <= 700 && y + 100 >= 0) {
+				temp.push_back(this->getIndex() + i);
+				i += 8;
+				y += 100;
 			}
-			temp.push_back(this->getIndex() + i);
-			i += 8;
+			else {
+				break;
+			}
+
 		}
+		
+			
 		Paths.push_back(temp);
 		temp.clear();
+
 		// going up
 		i = -8;
-		while (this->getIndex() + i <= 63 && this->getIndex() + i >= 0) {
-		
-			for (auto j : drawables) {
-				if (j->getIndex() == (this->getIndex() + i) && j->getType()[1] != 'k') {
-					temp.clear();
-					break;
-				}
+		y -= 100;
+		while ((this->getIndex() + i <= 63 && this->getIndex() + i >= 0 && !chess.Image()[this->getIndex() + i].second) || (this->getIndex() + i <= 63 && this->getIndex() + i >= 0 && !chess.Image()[this->getIndex() + i].second) && find_piece(this->getIndex() + i, drawables)[0] != 'k')
+		{
+			
+			if (x + 100 <= 700 && x + 100 >= 0 && y + 100 <= 700 && y + 100 >= 0) {
+				temp.push_back(this->getIndex() + i);
+				i -= 8;
+				y -= 100;
 			}
-			temp.push_back(this->getIndex() + i);
-			i -= 8;
+			else {
+				break;
+			}
+
 		}
+
 		Paths.push_back(temp);
 		temp.clear();
-		sf::Vector2f curr_pos = this->getPos();
-		int index = this->getIndex();
-		int x = (int)curr_pos.x;
-		int y = (int)curr_pos.y;
+
+		 x = (int)this->getPos().x;
+		 y = (int)this->getPos().y;
 		//right path
 		x += 100;
-		while (x >= 0 && x < 700 && y >= 0 && y <= 700) {
-			for (auto j : drawables) {
-				if (j->getIndex() == index + 1 && j->getType()[1] != 'k') {
-					temp.clear();
-					break;
-				}
+		i = 1;
+		while ((this->getIndex() + i <= 63 && this->getIndex() + i >= 0 && !chess.Image()[this->getIndex() + i].second) || (this->getIndex() + i <= 63 && this->getIndex() + i >= 0 && !chess.Image()[this->getIndex() + i].second) && find_piece(this->getIndex() + i, drawables)[0] != 'k'){
+			
+			if (x + 100 <= 700 && x + 100 >= 0 && y + 100 <= 700 && y + 100 >= 0) {
+				temp.push_back(this->getIndex() + i);
+				i += 1;
+				x += 100;
 			}
-			temp.push_back(++index);
-			x += 100;
+			else {
+				break;
+			}
 		}
 		Paths.push_back(temp);
 		temp.clear();
-		curr_pos = this->getPos();
-		index = this->getIndex();
-		x = (int)curr_pos.x;
-		y = (int)curr_pos.y;
+
+		x = (int)this->getPos().x;
+		y = (int)this->getPos().y;
 		//left path
 		x -= 100;
-		while (x > 0 && x <= 700 && y >= 0 && y <= 700) {
-			for (auto j : drawables) {
-				if (j->getIndex() == index - 1 && j->getType()[1] != 'k') {
-					temp.clear();
-					break;
-				}
-				
+		i = -1;
+		while ((this->getIndex() + i <= 63 && this->getIndex() + i >= 0 && !chess.Image()[this->getIndex() + i].second) || (this->getIndex() + i <= 63 && this->getIndex() + i >= 0 && !chess.Image()[this->getIndex() + i].second) && find_piece(this->getIndex() + i, drawables)[0] != 'k') {
+
+			if (x + 100 <= 700 && x + 100 >= 0 && y + 100 <= 700 && y + 100 >= 0) {
+				temp.push_back(this->getIndex() + i);
+				i -= 1;
+				x -= 100;
 			}
-			temp.push_back(--index);
-			x -= 100;
+			else {
+				break;
+			}
 		}
 		Paths.push_back(temp);
 		temp.clear();
+	
 
 		
 		
@@ -546,7 +664,7 @@ Castle(const std::string& text_name, const sf::Vector2f pos) : Chess(text_name, 
 
 
 		}
-		this->Create_Path(drawables);
+		this->Create_Path(drawables, chess);
 	}
 
 };
@@ -838,14 +956,113 @@ public:
 class Bishop : public Chess {
 public:
 	Bishop(const std::string& text_name, const sf::Vector2f pos) : Chess(text_name, pos) {}
-	
+
 	virtual const std::string getType() {
 		if (tex_path == "bishopw.png") {
 			return "bw";
 		}
-		else {
+		if(tex_path == "bishopb.png") {
 			return "bb";
 		}
+	}
+	void Create_Path(std::vector<Chess*> drawables, Board& chess) {
+		std::vector<int> temp;
+		sf::Vector2f curr_pos = this->getPos();
+		int index = this->getIndex();
+		int x = (int)curr_pos.x;
+		int y = (int)curr_pos.y;
+		//diagonal up and right
+		x += 100;
+		y -= 100;
+		int i = -7;
+		while ((this->getIndex() + i <= 63 && this->getIndex() + i >= 0 && !chess.Image()[this->getIndex() + i].second) || (this->getIndex() + i <= 63 && this->getIndex() + i >= 0 && !chess.Image()[this->getIndex() + i].second) && find_piece(this->getIndex() + i, drawables)[0] != 'k') {
+			
+			if (x + 100 <= 700 && x + 100 >= 0 && y + 100 <= 700 && y + 100 >= 0) {
+				temp.push_back(this->getIndex() + i);
+				i -= 7;
+				x += 100;
+				y -= 100;
+			}
+			else {
+				break;
+			}
+			
+		}
+		Paths.push_back(temp);
+		temp.clear();
+		curr_pos = this->getPos();
+		index = this->getIndex();
+		x = (int)curr_pos.x;
+		y = (int)curr_pos.y;
+		//diagonal down and left
+		x -= 100;
+		y += 100;
+		i = 7;
+		while ((this->getIndex() + i <= 63 && this->getIndex() + i >= 0 && !chess.Image()[this->getIndex() + i].second) || (this->getIndex() + i <= 63 && this->getIndex() + i >= 0 && !chess.Image()[this->getIndex() + i].second) && find_piece(this->getIndex() + i, drawables)[0] != 'k') {
+			
+			if (x + 100 <= 700 && x + 100 >= 0 && y + 100 <= 700 && y + 100 >= 0) {
+				temp.push_back(this->getIndex() + i);
+				i += 7;
+				x -= 100;
+				y += 100;
+			}
+			else {
+				break;
+			}
+
+
+		}
+		Paths.push_back(temp);
+		temp.clear();
+		curr_pos = this->getPos();
+		index = this->getIndex();
+		x = (int)curr_pos.x;
+		y = (int)curr_pos.y;
+		//diagonal up and left
+		x -= 100;
+		y -= 100;
+		i = -9;
+		while ((this->getIndex() + i <= 63 && this->getIndex() + i >= 0 && !chess.Image()[this->getIndex() + i].second) || (this->getIndex() + i <= 63 && this->getIndex() + i >= 0 && !chess.Image()[this->getIndex() + i].second) && find_piece(this->getIndex() + i, drawables)[0] != 'k') {
+			
+			if (x + 100 <= 700 && x + 100 >= 0 && y + 100 <= 700 && y + 100 >= 0) {
+				temp.push_back(this->getIndex() + i);
+				x -= 100;
+				y -= 100;
+				i -= 9;
+			}
+			else {
+				break;
+			}
+			
+
+
+		}
+		Paths.push_back(temp);
+		temp.clear();
+		curr_pos = this->getPos();
+		index = this->getIndex();
+		x = (int)curr_pos.x;
+		y = (int)curr_pos.y;
+		//diagonal down and right
+		x += 100;
+		y += 100;
+		i = 9;
+		while ((this->getIndex() + i <= 63 && this->getIndex() + i >= 0 && !chess.Image()[this->getIndex() + i].second) || (this->getIndex() + i <= 63 && this->getIndex() + i >= 0 && !chess.Image()[this->getIndex() + i].second) && find_piece(this->getIndex() + i, drawables)[0] != 'k') {
+			
+			if (x + 100 <= 700 && x + 100 >= 0 && y + 100 <= 700 && y + 100 >= 0) {
+				temp.push_back(this->getIndex() + i);
+				x += 100;
+				y += 100;
+				i += 9;
+			}
+			else {
+				break;
+			}
+
+		}
+		Paths.push_back(temp);
+		temp.clear();
+
 	}
 	virtual void check_move(const sf::Vector2i mousePos, Board& chess, std::vector<Chess*> drawables) {
 		if ((mousePos.x - this->getPos().x > 0.f && (mousePos.x - this->getPos().x < 100.f) && (mousePos.y - this->getPos().y > 0.f && (mousePos.y - this->getPos().y < 100.f)))) {
@@ -1019,12 +1236,15 @@ public:
 			 }
 
 		}
+
+		this->Create_Path(drawables,chess);
 	}
 };
 class Queen : public Bishop {
+private:
+
 public:
 	Queen(const std::string& text_name, const sf::Vector2f pos) : Bishop(text_name, pos) {}
-
 	virtual const std::string getType() {
 		if (tex_path == "queenw.png") {
 			return "qw";
@@ -1033,215 +1253,395 @@ public:
 			return "qb";
 		}
 	}
-	virtual void check_move(const sf::Vector2i mousePos, Board& chess, std::vector<Chess*> drawables) {
-		Bishop::check_move(mousePos,chess,drawables);
-		if ((mousePos.x - this->getPos().x > 0.f && (mousePos.x - this->getPos().x < 100.f) && (mousePos.y - this->getPos().y > 0.f && (mousePos.y - this->getPos().y < 100.f)))) {
-			int x = (int)(this->getPos().x);
-			int y = (int)(this->getPos().y);
-			int index = x / 100 + y / 100 * 8;
-				if (this->getType() == "qw") {
-					int x = (int)(this->getPos().x);
-					int y = (int)(this->getPos().y);
-					int index = x / 100 + y / 100 * 8;
-					for (int i = 1; i != 8; i++) {
-						if (index - i * 8 >= 0) {
-							if (chess.Image()[index - i * 8].second) {
-								sf::Vector2f new_pos = chess.getPos(index - i * 8);
-								for (auto& j : drawables) {
-									if (j->getPos() == new_pos && j->getType()[1] != this->getType()[1]) {
-										valid_moves.push_back(index - i * 8);
-									}
-								}
-								break;
-							}
-							if (!chess.Image()[index - i * 8].second) {
-								valid_moves.push_back(index - i * 8);
-							}
-						}
 
-					}
-				}
-				if (this->getType() == "qb") {
-					int x = (int)(this->getPos().x);
-					int y = (int)(this->getPos().y);
-					int index = x / 100 + y / 100 * 8;
-					for (int i = 1; i != 8; i++) {
-						if (index + i * 8 <= 63) {
-							if (chess.Image()[index + i * 8].second) {
-								// workout if this occupied grid has an enemy piece
-								sf::Vector2f new_pos = chess.getPos(index + i * 8);
-								for (auto& j : drawables) {
-									if (j->getPos() == new_pos && j->getType()[1] != this->getType()[1]) {
-										valid_moves.push_back(index + i * 8);
-									}
-								}
-								break;
-							}
-							if (!chess.Image()[index + i * 8].second) {
-								valid_moves.push_back(index + i * 8);
-							}
-						}
-					}
-				}
-				//horizontal to the right 
-				x = (int)(this->getPos().x);
-				y = (int)(this->getPos().y);
-				index = x / 100 + y / 100 * 8;
-				for (int i = 0; i != 7; i++) {
-					index += 1;
-					x += 100;
-					if (x >= 0 && x <= 700 && y >= 0 && y <= 700) {
-						bool enemy = false;
-						bool empty = false;
-						bool friendly = false;
-						sf::Vector2f position = chess.getPos(index);
-						for (auto& i : drawables) {
-							if (i->getPos() == position && i->getType()[1] != this->getType()[1]) {
-								enemy = true;
-								break;
-							}
-							if (i->getPos() == position && i->getType()[1] == this->getType()[1]) {
-								friendly = true;
-								break;
-							}
-						}
-						if (!chess.Image()[index].second) {
-							empty = true;
-						}
-						if (empty || enemy) {
-							valid_moves.push_back(index);
-							if (enemy) {
-								break;
-							}
+	void Create_Path(std::vector<Chess*> drawables, Board& chess) {
+		std::vector<int> temp;
+		//going down
+		int x = (int)this->getPos().x;
+		int y = (int)this->getPos().y;
+		int i = 8;
+		y += 100;
+		while ((this->getIndex() + i <= 63 && this->getIndex() + i >= 0 && !chess.Image()[this->getIndex() + i].second) || (this->getIndex() + i <= 63 && this->getIndex() + i >= 0 && !chess.Image()[this->getIndex() + i].second) && find_piece(this->getIndex() + i, drawables)[0] != 'k')
+		{
+			if (x + 100 <= 700 && x + 100 >= 0 && y + 100 <= 700 && y + 100 >= 0) {
+				temp.push_back(this->getIndex() + i);
+				i += 8;
+				y += 100;
+			}
+			else {
+				break;
+			}
 
-						}
-						if (friendly) {
-							break;
-						}
+		}
 
-					}
-				}
-				x = (int)(this->getPos().x);
-				y = (int)(this->getPos().y);
-				index = x / 100 + y / 100 * 8;
-				for (int i = 0; i != 7; i++) {
-					index -= 1;
-					x -= 100;
-					if (x >= 0 && x <= 700 && y >= 0 && y <= 700) {
-						bool enemy = false;
-						bool empty = false;
-						bool friendly = false;
-						sf::Vector2f position = chess.getPos(index);
-						for (auto& i : drawables) {
-							if (i->getPos() == position && i->getType()[1] != this->getType()[1]) {
-								enemy = true;
-								break;
-							}
-							if (i->getPos() == position && i->getType()[1] == this->getType()[1]) {
-								friendly = true;
-								break;
-							}
-						}
-						if (!chess.Image()[index].second) {
-							empty = true;
-						}
-						if (empty || enemy) {
-							valid_moves.push_back(index);
-							if (enemy) {
-								break;
-							}
 
-						}
-						if (friendly) {
-							break;
-						}
+		Paths.push_back(temp);
+		temp.clear();
 
-					}
-				}
-				// going down
-				x = (int)(this->getPos().x);
-				y = (int)(this->getPos().y);
-				index = x / 100 + y / 100 * 8;
-				for (int i = 0; i != 7; i++) {
-					index += 8;
-					y += 100;
-					if (x >= 0 && x <= 700 && y >= 0 && y <= 700) {
-						bool enemy = false;
-						bool empty = false;
-						bool friendly = false;
-						sf::Vector2f position = chess.getPos(index);
-						for (auto& i : drawables) {
-							if (i->getPos() == position && i->getType()[1] != this->getType()[1]) {
-								enemy = true;
-								break;
-							}
-							if (i->getPos() == position && i->getType()[1] == this->getType()[1]) {
-								friendly = true;
-								break;
-							}
-						}
-						if (!chess.Image()[index].second) {
-							empty = true;
-						}
-						if (empty || enemy) {
-							valid_moves.push_back(index);
-							if (enemy) {
-								break;
-							}
+		// going up
+		i = -8;
+		y -= 100;
+		while ((this->getIndex() + i <= 63 && this->getIndex() + i >= 0 && !chess.Image()[this->getIndex() + i].second) || (this->getIndex() + i <= 63 && this->getIndex() + i >= 0 && !chess.Image()[this->getIndex() + i].second) && find_piece(this->getIndex() + i, drawables)[0] != 'k')
+		{
 
-						}
-						if (friendly) {
-							break;
-						}
+			if (x + 100 <= 700 && x + 100 >= 0 && y + 100 <= 700 && y + 100 >= 0) {
+				temp.push_back(this->getIndex() + i);
+				i -= 8;
+				y -= 100;
+			}
+			else {
+				break;
+			}
 
-					}
-				}
-				//going up
-				x = (int)(this->getPos().x);
-				y = (int)(this->getPos().y);
-				index = x / 100 + y / 100 * 8;
-				for (int i = 0; i != 7; i++) {
-					index -= 8;
-					y -= 100;
-					if (x >= 0 && x <= 700 && y >= 0 && y <= 700) {
-						bool enemy = false;
-						bool empty = false;
-						bool friendly = false;
-						sf::Vector2f position = chess.getPos(index);
-						for (auto& i : drawables) {
-							if (i->getPos() == position && i->getType()[1] != this->getType()[1]) {
-								enemy = true;
-								break;
-							}
-							if (i->getPos() == position && i->getType()[1] == this->getType()[1]) {
-								friendly = true;
-								break;
-							}
-						}
-						if (!chess.Image()[index].second) {
-							empty = true;
-						}
-						if (empty || enemy) {
-							valid_moves.push_back(index);
-							if (enemy) {
-								break;
-							}
+		}
 
-						}
-						if (friendly) {
-							break;
-						}
+		Paths.push_back(temp);
+		temp.clear();
 
-					}
-				}
+		x = (int)this->getPos().x;
+		y = (int)this->getPos().y;
+		//right path
+		x += 100;
+		i = 1;
+		while ((this->getIndex() + i <= 63 && this->getIndex() + i >= 0 && !chess.Image()[this->getIndex() + i].second) || (this->getIndex() + i <= 63 && this->getIndex() + i >= 0 && !chess.Image()[this->getIndex() + i].second) && find_piece(this->getIndex() + i, drawables)[0] != 'k') {
 
+			if (x + 100 <= 700 && x + 100 >= 0 && y + 100 <= 700 && y + 100 >= 0) {
+				temp.push_back(this->getIndex() + i);
+				i += 1;
+				x += 100;
+			}
+			else {
+				break;
+			}
+		}
+		Paths.push_back(temp);
+		temp.clear();
+
+		x = (int)this->getPos().x;
+		y = (int)this->getPos().y;
+		//left path
+		x -= 100;
+		i = -1;
+		while ((this->getIndex() + i <= 63 && this->getIndex() + i >= 0 && !chess.Image()[this->getIndex() + i].second) || (this->getIndex() + i <= 63 && this->getIndex() + i >= 0 && !chess.Image()[this->getIndex() + i].second) && find_piece(this->getIndex() + i, drawables)[0] != 'k') {
+
+			if (x + 100 <= 700 && x + 100 >= 0 && y + 100 <= 700 && y + 100 >= 0) {
+				temp.push_back(this->getIndex() + i);
+				i -= 1;
+				x -= 100;
+			}
+			else {
+				break;
+			}
+		}
+		Paths.push_back(temp);
+		temp.clear();
+		x += 100;
+		y -= 100;
+		 i = -7;
+		while ((this->getIndex() + i <= 63 && this->getIndex() + i >= 0 && !chess.Image()[this->getIndex() + i].second) || (this->getIndex() + i <= 63 && this->getIndex() + i >= 0 && !chess.Image()[this->getIndex() + i].second) && find_piece(this->getIndex() + i, drawables)[0] != 'k') {
+
+			if (x + 100 <= 700 && x + 100 >= 0 && y + 100 <= 700 && y + 100 >= 0) {
+				temp.push_back(this->getIndex() + i);
+				i -= 7;
+				x += 100;
+				y -= 100;
+			}
+			else {
+				break;
+			}
 
 		}
 		
+		Paths.push_back(temp);
+		temp.clear();
+
+		sf::Vector2f curr_pos = this->getPos();
+		curr_pos = this->getPos();
+		x = (int)curr_pos.x;
+		y = (int)curr_pos.y;
+		//diagonal down and left
+		x -= 100;
+		y += 100;
+		i = 7;
+		while ((this->getIndex() + i <= 63 && this->getIndex() + i >= 0 && !chess.Image()[this->getIndex() + i].second) || (this->getIndex() + i <= 63 && this->getIndex() + i >= 0 && !chess.Image()[this->getIndex() + i].second) && find_piece(this->getIndex() + i, drawables)[0] != 'k') {
+
+			if (x + 100 <= 700 && x + 100 >= 0 && y + 100 <= 700 && y + 100 >= 0) {
+				temp.push_back(this->getIndex() + i);
+				i += 7;
+				x -= 100;
+				y += 100;
+			}
+			else {
+				break;
+			}
+
+
+		}
+		Paths.push_back(temp);
+		temp.clear();
+		curr_pos = this->getPos();
+		
+		x = (int)curr_pos.x;
+		y = (int)curr_pos.y;
+		//diagonal up and left
+		x -= 100;
+		y -= 100;
+		i = -9;
+		while ((this->getIndex() + i <= 63 && this->getIndex() + i >= 0 && !chess.Image()[this->getIndex() + i].second) || (this->getIndex() + i <= 63 && this->getIndex() + i >= 0 && !chess.Image()[this->getIndex() + i].second) && find_piece(this->getIndex() + i, drawables)[0] != 'k') {
+
+			if (x + 100 <= 700 && x + 100 >= 0 && y + 100 <= 700 && y + 100 >= 0) {
+				temp.push_back(this->getIndex() + i);
+				x -= 100;
+				y -= 100;
+				i -= 9;
+			}
+			else {
+				break;
+			}
+
+
+
+		}
+		Paths.push_back(temp);
+		temp.clear();
+		curr_pos = this->getPos();
+
+		x = (int)curr_pos.x;
+		y = (int)curr_pos.y;
+		//diagonal down and right
+		x += 100;
+		y += 100;
+		i = 9;
+		while ((this->getIndex() + i <= 63 && this->getIndex() + i >= 0 && !chess.Image()[this->getIndex() + i].second) || (this->getIndex() + i <= 63 && this->getIndex() + i >= 0 && !chess.Image()[this->getIndex() + i].second) && find_piece(this->getIndex() + i, drawables)[0] != 'k') {
+
+			if (x + 100 <= 700 && x + 100 >= 0 && y + 100 <= 700 && y + 100 >= 0) {
+				temp.push_back(this->getIndex() + i);
+				x += 100;
+				y += 100;
+				i += 9;
+			}
+			else {
+				break;
+			}
+
+		}
+		Paths.push_back(temp);
+		temp.clear();
+
+
 	}
 
-	
+	virtual void check_move(const sf::Vector2i mousePos, Board& chess, std::vector<Chess*> drawables) {
+		if ((mousePos.x - this->getPos().x > 0.f && (mousePos.x - this->getPos().x < 100.f) && (mousePos.y - this->getPos().y > 0.f && (mousePos.y - this->getPos().y < 100.f)))) {
+			Bishop::check_move(mousePos, chess, drawables);
+			int x = (int)(this->getPos().x);
+			int y = (int)(this->getPos().y);
+			int index = x / 100 + y / 100 * 8;
+			if (this->getType() == "qw") {
+				int x = (int)(this->getPos().x);
+				int y = (int)(this->getPos().y);
+				int index = x / 100 + y / 100 * 8;
+				for (int i = 1; i != 8; i++) {
+					if (index - i * 8 >= 0) {
+						if (chess.Image()[index - i * 8].second) {
+							sf::Vector2f new_pos = chess.getPos(index - i * 8);
+							for (auto& j : drawables) {
+								if (j->getPos() == new_pos && j->getType()[1] != this->getType()[1]) {
+									valid_moves.push_back(index - i * 8);
+								}
+							}
+							break;
+						}
+						if (!chess.Image()[index - i * 8].second) {
+							valid_moves.push_back(index - i * 8);
+						}
+					}
+
+				}
+			}
+			if (this->getType() == "qb") {
+				int x = (int)(this->getPos().x);
+				int y = (int)(this->getPos().y);
+				int index = x / 100 + y / 100 * 8;
+				for (int i = 1; i != 8; i++) {
+					if (index + i * 8 <= 63) {
+						if (chess.Image()[index + i * 8].second) {
+							// workout if this occupied grid has an enemy piece
+							sf::Vector2f new_pos = chess.getPos(index + i * 8);
+							for (auto& j : drawables) {
+								if (j->getPos() == new_pos && j->getType()[1] != this->getType()[1]) {
+									valid_moves.push_back(index + i * 8);
+								}
+							}
+							break;
+						}
+						if (!chess.Image()[index + i * 8].second) {
+							valid_moves.push_back(index + i * 8);
+						}
+					}
+				}
+			}
+			//horizontal to the right 
+			x = (int)(this->getPos().x);
+			y = (int)(this->getPos().y);
+			index = x / 100 + y / 100 * 8;
+			for (int i = 0; i != 7; i++) {
+				index += 1;
+				x += 100;
+				if (x >= 0 && x <= 700 && y >= 0 && y <= 700) {
+					bool enemy = false;
+					bool empty = false;
+					bool friendly = false;
+					sf::Vector2f position = chess.getPos(index);
+					for (auto& i : drawables) {
+						if (i->getPos() == position && i->getType()[1] != this->getType()[1]) {
+							enemy = true;
+							break;
+						}
+						if (i->getPos() == position && i->getType()[1] == this->getType()[1]) {
+							friendly = true;
+							break;
+						}
+					}
+					if (!chess.Image()[index].second) {
+						empty = true;
+					}
+					if (empty || enemy) {
+						valid_moves.push_back(index);
+						if (enemy) {
+							break;
+						}
+
+					}
+					if (friendly) {
+						break;
+					}
+
+				}
+			}
+			x = (int)(this->getPos().x);
+			y = (int)(this->getPos().y);
+			index = x / 100 + y / 100 * 8;
+			for (int i = 0; i != 7; i++) {
+				index -= 1;
+				x -= 100;
+				if (x >= 0 && x <= 700 && y >= 0 && y <= 700) {
+					bool enemy = false;
+					bool empty = false;
+					bool friendly = false;
+					sf::Vector2f position = chess.getPos(index);
+					for (auto& i : drawables) {
+						if (i->getPos() == position && i->getType()[1] != this->getType()[1]) {
+							enemy = true;
+							break;
+						}
+						if (i->getPos() == position && i->getType()[1] == this->getType()[1]) {
+							friendly = true;
+							break;
+						}
+					}
+					if (!chess.Image()[index].second) {
+						empty = true;
+					}
+					if (empty || enemy) {
+						valid_moves.push_back(index);
+						if (enemy) {
+							break;
+						}
+
+					}
+					if (friendly) {
+						break;
+					}
+
+				}
+			}
+			// going down
+			x = (int)(this->getPos().x);
+			y = (int)(this->getPos().y);
+			index = x / 100 + y / 100 * 8;
+			for (int i = 0; i != 7; i++) {
+				index += 8;
+				y += 100;
+				if (x >= 0 && x <= 700 && y >= 0 && y <= 700) {
+					bool enemy = false;
+					bool empty = false;
+					bool friendly = false;
+					sf::Vector2f position = chess.getPos(index);
+					for (auto& i : drawables) {
+						if (i->getPos() == position && i->getType()[1] != this->getType()[1]) {
+							enemy = true;
+							break;
+						}
+						if (i->getPos() == position && i->getType()[1] == this->getType()[1]) {
+							friendly = true;
+							break;
+						}
+					}
+					if (!chess.Image()[index].second) {
+						empty = true;
+					}
+					if (empty || enemy) {
+						valid_moves.push_back(index);
+						if (enemy) {
+							break;
+						}
+
+					}
+					if (friendly) {
+						break;
+					}
+
+				}
+			}
+			//going up
+			x = (int)(this->getPos().x);
+			y = (int)(this->getPos().y);
+			index = x / 100 + y / 100 * 8;
+			for (int i = 0; i != 7; i++) {
+				index -= 8;
+				y -= 100;
+				if (x >= 0 && x <= 700 && y >= 0 && y <= 700) {
+					bool enemy = false;
+					bool empty = false;
+					bool friendly = false;
+					sf::Vector2f position = chess.getPos(index);
+					for (auto& i : drawables) {
+						if (i->getPos() == position && i->getType()[1] != this->getType()[1]) {
+							enemy = true;
+							break;
+						}
+						if (i->getPos() == position && i->getType()[1] == this->getType()[1]) {
+							friendly = true;
+							break;
+						}
+					}
+					if (!chess.Image()[index].second) {
+						empty = true;
+					}
+					if (empty || enemy) {
+						valid_moves.push_back(index);
+						if (enemy) {
+							break;
+						}
+
+					}
+					if (friendly) {
+						break;
+					}
+
+				}
+			}
+			
+
+			
+
+		}
+	}
+
+
 };
+
 class King : public Chess {
 private: 
 	std::vector<int> danger_pieces;
@@ -1249,7 +1649,7 @@ public:
 
 	King(const std::string& text_name, const sf::Vector2f pos) : Chess(text_name, pos) {}
 	
-
+	std::vector<int> get_danger_pieces() { return danger_pieces; }
 	virtual const std::string getType() {
 		if (tex_path == "kingw.png") {
 			return "kw";
@@ -1258,6 +1658,7 @@ public:
 			return "kb";
 		}
 	}
+	
 	bool check_if_in_check(Board& chess, std::vector<Chess*>& drawables) {
 	
 		bool in_check = false;
@@ -1517,19 +1918,25 @@ public:
 
 			}
 		}
+		std::vector<int> moves_to_delete;
+
 		// check to see these legal moves will not place king in a check position 
 		for (auto& i : drawables) {
 			if (i->getType()[1] != this->getType()[1]) {
 				for (auto& j : i->legal_moves()) {
 					for (auto& k : this->legal_moves()) {
 						if (j == k) {
-							this->legal_moves().erase(std::remove(this->legal_moves().begin(), this->legal_moves().end(), k), this->legal_moves().end());
+							moves_to_delete.push_back(k);
 							break;
 						}
 					}
 				}
 			}
 		}
+		for (auto i : moves_to_delete) {
+			this->legal_moves().erase(std::remove(this->legal_moves().begin(), this->legal_moves().end(), i), this->legal_moves().end());
+		}
+		moves_to_delete.clear();
 		
 			for (auto& i : drawables) {
 				if (i->getType()[1] != this->getType()[1]) {
@@ -1537,13 +1944,17 @@ public:
 						for (auto& M : j) {
 							for (auto& k : this->legal_moves()) {
 								if (M == k) {
-									this->legal_moves().erase(std::remove(this->legal_moves().begin(), this->legal_moves().end(), k), this->legal_moves().end());
+									moves_to_delete.push_back(k);
 									break;
 								}
 							}
 						}
 					}
 				}
+			}
+
+			for (auto i : moves_to_delete) {
+				this->legal_moves().erase(std::remove(this->legal_moves().begin(), this->legal_moves().end(), i), this->legal_moves().end());
 			}
 		
 	}
